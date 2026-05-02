@@ -54,6 +54,8 @@ class EvalRunResponse(BaseModel):
     factuality_score: float | None = None
     format_score: float | None = None
     hallucination_score: float | None = None
+    semantic_similarity_score: float | None = None
+    pii_leakage_score: float | None = None
     drift_flagged: bool
     run_type: str
     run_status: str = "complete"
@@ -320,6 +322,8 @@ async def run_evaluation(
         factuality_score=eval_run.factuality_score,
         format_score=eval_run.format_score,
         hallucination_score=eval_run.hallucination_score,
+        semantic_similarity_score=eval_run.semantic_similarity_score,
+        pii_leakage_score=eval_run.pii_leakage_score,
         drift_flagged=eval_run.drift_flagged,
         run_type=eval_run.run_type,
         run_status=eval_run.run_status,
@@ -354,6 +358,8 @@ def list_eval_runs(
             factuality_score=run.factuality_score,
             format_score=run.format_score,
             hallucination_score=run.hallucination_score,
+            semantic_similarity_score=run.semantic_similarity_score,
+            pii_leakage_score=run.pii_leakage_score,
             drift_flagged=run.drift_flagged,
             run_type=run.run_type,
             run_status=run.run_status,
@@ -383,6 +389,8 @@ def get_eval_run(
         factuality_score=run.factuality_score,
         format_score=run.format_score,
         hallucination_score=run.hallucination_score,
+        semantic_similarity_score=run.semantic_similarity_score,
+        pii_leakage_score=run.pii_leakage_score,
         drift_flagged=run.drift_flagged,
         run_type=run.run_type,
         run_status=run.run_status,

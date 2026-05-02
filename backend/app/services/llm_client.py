@@ -424,7 +424,7 @@ def _redact_response_text(response, redacted_text: str) -> None:
 
 def _make_api_call(caller: str, model: str, max_tokens: int, messages: list,
                    max_retries: int = 2, user_id: int | None = None,
-                   service_id: int | None = None, **kwargs):
+                   service_id: int | None = None, skip_input_safety: bool = False, **kwargs):
     """
     Centralized Claude call. Single path for every caller:
       1. Regex input safety scan (scan_input)
@@ -453,11 +453,12 @@ def _make_api_call(caller: str, model: str, max_tokens: int, messages: list,
             risk_score=safety_result["risk_score"],
             prompt_text=safe_input_text,
         )
-        raise PromptSafetyError(
-            f"Prompt blocked by safety scanner: {', '.join(safety_result['flags'])}",
-            flags=safety_result["flags"],
-            risk_score=safety_result["risk_score"],
-        )
+        if not skip_input_safety:
+            raise PromptSafetyError(
+                f"Prompt blocked by safety scanner: {', '.join(safety_result['flags'])}",
+                flags=safety_result["flags"],
+                risk_score=safety_result["risk_score"],
+            )
 
     # 2. Single gatekeeper: hard caps + soft budgets + rate limits. All
     # limit enforcement goes through enforce_call_limits — no ad-hoc
@@ -618,6 +619,7 @@ async def run_eval_prompt(
             messages=[{"role": "user", "content": prompt}],
             user_id=user_id,
             service_id=service_id,
+            skip_input_safety=True,  # Allow eval harness to send injection attacks
             **kwargs,
         )
         text = response.content[0].text if response.content else ""

@@ -38,6 +38,30 @@ function HallucCell({ value }) {
   );
 }
 
+function PIICell({ value }) {
+  if (value === null || value === undefined) {
+    return <span className="font-mono text-[13px] text-text-subtle">—</span>;
+  }
+  const isClean = value === 100;
+  if (isClean) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[12px] font-semibold bg-status-healthy-muted text-status-healthy">
+        <Check size={12} strokeWidth={2.25} />
+        Clean
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[12px] font-semibold bg-status-failing-muted text-status-failing">
+        <AlertTriangle size={12} strokeWidth={2.25} />
+        Leakage
+      </span>
+      <span className="font-mono tabular-nums text-[13px] font-medium text-status-failing">{value}% safe</span>
+    </div>
+  );
+}
+
 // Tooltip content for the scheduler badge. Numbers match defaults in
 // backend/app/config.py (eval_schedule_minutes=60). Narrated so a panel
 // reviewer can hover and get the "what fires, when, and how to turn it off"
@@ -165,15 +189,21 @@ function ScoreDetailsModal({ isOpen, onClose, row }) {
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-text-subtle">Format</p>
+              <p className="text-[11px] text-text-subtle">Semantic</p>
               <p className="font-mono tabular-nums text-[16px] font-semibold text-text">
-                {row.format_score ?? '—'}{row.format_score != null && '%'}
+                {row.semantic_similarity_score ?? '—'}{row.semantic_similarity_score != null && '%'}
               </p>
             </div>
             <div>
               <p className="text-[11px] text-text-subtle">Hallucination</p>
               <p className="font-mono tabular-nums text-[16px] font-semibold text-text">
                 {row.hallucination_score ?? '—'}{row.hallucination_score != null && '%'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-text-subtle">PII Safe</p>
+              <p className="font-mono tabular-nums text-[16px] font-semibold text-text">
+                {row.pii_leakage_score ?? '—'}{row.pii_leakage_score != null && '%'}
               </p>
             </div>
           </div>
@@ -191,6 +221,8 @@ function ScoreDetailsModal({ isOpen, onClose, row }) {
           </h4>
           <div className="pl-5 space-y-1.5">
             <p><span className="font-semibold text-text">factuality</span> — LLM judge (Haiku 4.5) rates similarity to the expected output, 0–100. Also runs a hallucination check. Judge refusal ⇒ excluded (not read as 0).</p>
+            <p><span className="font-semibold text-text">semantic</span> — Vector-based (TF-IDF Cosine) similarity between actual and expected output. A deterministic mathematical measure that complements the LLM judge's subjective view.</p>
+            <p><span className="font-semibold text-text">pii_leakage</span> — Boolean scanner for PII/PHI (SSNs, emails, etc.). Score is the percentage of test cases that were 100% clean of leakage.</p>
             <p><span className="font-semibold text-text">format_json</span> — deterministic parser. Tries raw parse → <code className="font-mono text-[11px] bg-surface-elevated px-1 rounded">```json</code> fence → first <code className="font-mono text-[11px] bg-surface-elevated px-1 rounded">{'{...}'}</code> span. Valid JSON = 100, else 0.</p>
           </div>
         </section>
@@ -303,9 +335,9 @@ export default function EvalRunsSection({ evalRuns }) {
       render: (v) => <span className="font-mono tabular-nums text-[13px]">{v !== null ? `${v}%` : '-'}</span>,
     },
     {
-      key: 'format_score',
-      label: 'Format',
-      tooltip: 'Whether the output parses correctly (e.g. valid JSON for format-typed test cases). Higher is better.',
+      key: 'semantic_similarity_score',
+      label: 'Semantic',
+      tooltip: 'Vector-based (TF-IDF Cosine) similarity to the expected output. Provides an objective mathematical baseline alongside the LLM judge.',
       render: (v) => <span className="font-mono tabular-nums text-[13px]">{v !== null ? `${v}%` : '-'}</span>,
     },
     {
@@ -313,6 +345,12 @@ export default function EvalRunsSection({ evalRuns }) {
       label: 'Hallucination',
       tooltip: 'Did the model fabricate claims not grounded in the input? No = score ≤10 (clean). Yes = score >10, shown alongside as a severity %. Score >30 is treated as severe.',
       render: (v) => <HallucCell value={v} />,
+    },
+    {
+      key: 'pii_leakage_score',
+      label: 'PII Safe',
+      tooltip: 'Percentage of test cases in this run that were 100% free of PII/PHI leakage (SSNs, emails, etc.).',
+      render: (v) => <PIICell value={v} />,
     },
     {
       key: 'judge_model',

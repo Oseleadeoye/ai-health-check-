@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import AIService, Alert, EvalRun, EvalResult, EvalTestCase, Telemetry
 from app.services.llm_client import run_eval_prompt, judge_response
+from app.services.metrics import calculate_semantic_similarity, detect_pii_leakage
 
 settings = get_settings()
 
@@ -94,6 +95,8 @@ async def run_service_evaluation(
     factuality_scores: list[float] = []
     format_scores: list[float] = []
     hallucination_scores: list[float] = []
+    semantic_scores: list[float] = []
+    pii_leakage_flags: list[bool] = []
 
     for tc in test_cases:
         llm_result = await run_eval_prompt(
@@ -154,6 +157,15 @@ async def run_service_evaluation(
             score = _score_json_payload(response_text)
             format_scores.append(score)
 
+        # Advanced Metrics - calculate for every successful (non-infra-error) response
+        semantic_sim = None
+        pii_leak = False
+        if not response_text.startswith("ERROR:"):
+            semantic_sim = calculate_semantic_similarity(response_text, tc.expected_output)
+            semantic_scores.append(semantic_sim)
+            pii_leak = detect_pii_leakage(response_text)
+            pii_leakage_flags.append(pii_leak)
+
         if judge_refused:
             result_status = "judge_refused"
             display_score = None
@@ -172,6 +184,8 @@ async def run_service_evaluation(
             "actual": response_text[:200],
             "score": display_score if display_score is not None else 0,
             "hallucination_score": halluc_score,
+            "semantic_similarity": semantic_sim,
+            "pii_detected": pii_leak,
             "latency_ms": latency_ms,
             "status": result_status,
         })
@@ -191,6 +205,15 @@ async def run_service_evaluation(
     hallucination_score = (
         round(sum(hallucination_scores) / len(hallucination_scores), 1)
         if hallucination_scores else None
+    )
+    semantic_similarity_score = (
+        round(sum(semantic_scores) / len(semantic_scores), 1)
+        if semantic_scores else None
+    )
+    # PII Leakage Score: percentage of cases with NO PII detected
+    pii_leakage_score = (
+        round((1 - sum(pii_leakage_flags) / len(pii_leakage_flags)) * 100, 1)
+        if pii_leakage_flags else None
     )
 
     if valid_scores:
@@ -222,6 +245,8 @@ async def run_service_evaluation(
         factuality_score=factuality_score,
         hallucination_score=hallucination_score,
         format_score=format_score,
+        semantic_similarity_score=semantic_similarity_score,
+        pii_leakage_score=pii_leakage_score,
         drift_flagged=drift_flagged,
         run_type=run_type,
         run_status=run_status,
@@ -236,6 +261,8 @@ async def run_service_evaluation(
             test_case_id=r["test_case_id"],
             response_text=r["actual"],
             score=r["score"],
+            semantic_similarity=r["semantic_similarity"],
+            pii_detected=r["pii_detected"],
             latency_ms=r["latency_ms"],
             status=r["status"],
         ))
@@ -254,6 +281,16 @@ async def run_service_evaluation(
         db.add(Telemetry(
             service_id=service.id, metric_name="format_score",
             metric_value=format_score, recorded_at=now,
+        ))
+    if semantic_similarity_score is not None:
+        db.add(Telemetry(
+            service_id=service.id, metric_name="semantic_similarity",
+            metric_value=semantic_similarity_score, recorded_at=now,
+        ))
+    if pii_leakage_score is not None:
+        db.add(Telemetry(
+            service_id=service.id, metric_name="pii_leakage_score",
+            metric_value=pii_leakage_score, recorded_at=now,
         ))
 
     if drift_flagged:

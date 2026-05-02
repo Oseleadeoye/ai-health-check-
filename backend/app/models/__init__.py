@@ -135,6 +135,8 @@ class EvalRun(Base):
     factuality_score = Column(Float, nullable=True)
     format_score = Column(Float, nullable=True)
     hallucination_score = Column(Float, nullable=True)
+    semantic_similarity_score = Column(Float, nullable=True)
+    pii_leakage_score = Column(Float, nullable=True)
     drift_flagged = Column(Boolean, default=False)
     run_type = Column(String(20), default="manual")  # "manual" or "scheduled"
     # Tri-state honest status:
@@ -162,6 +164,8 @@ class EvalResult(Base):
     test_case_id = Column(Integer, ForeignKey("eval_test_cases.id"), nullable=False)
     response_text = Column(Text, default="")
     score = Column(Float, nullable=False)
+    semantic_similarity = Column(Float, nullable=True)
+    pii_detected = Column(Boolean, default=False)
     latency_ms = Column(Float, default=0.0)
     status = Column(String(20), default="success")  # "success" or "error"
     created_at = Column(DateTime, default=utcnow)
